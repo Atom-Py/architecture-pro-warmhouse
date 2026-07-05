@@ -1,0 +1,337 @@
+openapi: 3.0.3
+info:
+  title: Devices Service API
+  description: >
+    REST API сервиса устройств. Реестр устройств, чтение текущего состояния,
+    отправка команд управления. Команды доставляются устройству асинхронно
+    через шину событий, поэтому эндпоинт команд отвечает 202 Accepted.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8082/api/v1
+    description: Локальный запуск devices-service
+
+tags:
+  - name: devices
+    description: Реестр и состояние устройств
+  - name: commands
+    description: Команды управления устройствами
+
+paths:
+  /devices:
+    post:
+      tags: [devices]
+      summary: Регистрация нового устройства
+      description: Пользователь сам подключает купленное устройство, указав серийный номер, тип и дом.
+      operationId: registerDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+            examples:
+              heatingRelay:
+                summary: Реле отопления в гостиной
+                value:
+                  serial_number: "WH-2026-000123"
+                  type_id: 1
+                  house_id: 42
+                  name: "Отопление в гостиной"
+                  location: "Living Room"
+      responses:
+        '201':
+          description: Устройство зарегистрировано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+              examples:
+                created:
+                  value:
+                    id: 517
+                    serial_number: "WH-2026-000123"
+                    type_id: 1
+                    house_id: 42
+                    name: "Отопление в гостиной"
+                    location: "Living Room"
+                    status: "offline"
+                    registered_at: "2026-07-05T12:00:00Z"
+        '400':
+          description: Некорректное тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                badRequest:
+                  value:
+                    code: "validation_error"
+                    message: "serial_number is required"
+        '409':
+          description: Устройство с таким серийным номером уже зарегистрировано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                conflict:
+                  value:
+                    code: "already_registered"
+                    message: "device WH-2026-000123 is already registered"
+
+  /devices/{deviceId}:
+    parameters:
+      - $ref: '#/components/parameters/DeviceId'
+    get:
+      tags: [devices]
+      summary: Информация об устройстве
+      description: Карточка устройства с текущим состоянием.
+      operationId: getDevice
+      responses:
+        '200':
+          description: Устройство найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+              examples:
+                heatingRelay:
+                  value:
+                    id: 517
+                    serial_number: "WH-2026-000123"
+                    type_id: 1
+                    house_id: 42
+                    name: "Отопление в гостиной"
+                    location: "Living Room"
+                    status: "on"
+                    registered_at: "2026-07-05T12:00:00Z"
+        '404':
+          $ref: '#/components/responses/DeviceNotFound'
+    patch:
+      tags: [devices]
+      summary: Обновление устройства
+      description: Изменение имени, расположения или привязки к дому.
+      operationId: updateDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+            examples:
+              rename:
+                value:
+                  name: "Отопление на первом этаже"
+                  location: "First Floor"
+      responses:
+        '200':
+          description: Устройство обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+              examples:
+                updated:
+                  value:
+                    id: 517
+                    serial_number: "WH-2026-000123"
+                    type_id: 1
+                    house_id: 42
+                    name: "Отопление на первом этаже"
+                    location: "First Floor"
+                    status: "on"
+                    registered_at: "2026-07-05T12:00:00Z"
+        '400':
+          description: Некорректное тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/DeviceNotFound'
+
+  /devices/{deviceId}/commands:
+    parameters:
+      - $ref: '#/components/parameters/DeviceId'
+    post:
+      tags: [commands]
+      summary: Отправка команды устройству
+      description: >
+        Команда валидируется (устройство существует, тип поддерживает операцию)
+        и публикуется в шину событий. Ответ 202 - команда принята к доставке,
+        фактический статус можно узнать по карточке устройства или журналу команд.
+      operationId: sendCommand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandRequest'
+            examples:
+              turnOn:
+                summary: Включить отопление
+                value:
+                  command: "turn_on"
+              setTemperature:
+                summary: Установить целевую температуру
+                value:
+                  command: "set_value"
+                  payload:
+                    target_temperature: 22.5
+      responses:
+        '202':
+          description: Команда принята к асинхронной доставке
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandAccepted'
+              examples:
+                accepted:
+                  value:
+                    command_id: "0d1f7c1e-9be2-4c8e-9a6b-2f6d5f3a1c11"
+                    device_id: 517
+                    command: "turn_on"
+                    status: "pending"
+                    created_at: "2026-07-05T12:34:56Z"
+        '404':
+          $ref: '#/components/responses/DeviceNotFound'
+        '422':
+          description: Тип устройства не поддерживает такую команду
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unsupported:
+                  value:
+                    code: "unsupported_command"
+                    message: "device type 'temperature_sensor' does not support command 'turn_on'"
+
+components:
+  parameters:
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      description: Идентификатор устройства
+      schema:
+        type: integer
+        format: int64
+        example: 517
+
+  responses:
+    DeviceNotFound:
+      description: Устройство не найдено
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            notFound:
+              value:
+                code: "device_not_found"
+                message: "device 517 not found"
+
+  schemas:
+    Device:
+      type: object
+      required: [id, serial_number, type_id, house_id, name, status, registered_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Идентификатор устройства
+        serial_number:
+          type: string
+          description: Серийный номер
+        type_id:
+          type: integer
+          format: int64
+          description: Ссылка на тип устройства
+        house_id:
+          type: integer
+          format: int64
+          description: Дом, к которому привязано устройство
+        name:
+          type: string
+          description: Имя, заданное пользователем
+        location:
+          type: string
+          description: Расположение в доме
+        status:
+          type: string
+          enum: [on, off, offline]
+          description: Текущее состояние
+        registered_at:
+          type: string
+          format: date-time
+
+    DeviceCreate:
+      type: object
+      required: [serial_number, type_id, house_id, name]
+      properties:
+        serial_number:
+          type: string
+        type_id:
+          type: integer
+          format: int64
+        house_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        location:
+          type: string
+
+    DeviceUpdate:
+      type: object
+      description: Все поля необязательные, обновляются только переданные
+      properties:
+        name:
+          type: string
+        location:
+          type: string
+        house_id:
+          type: integer
+          format: int64
+
+    CommandRequest:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+          description: Имя команды из capabilities типа устройства
+          example: turn_on
+        payload:
+          type: object
+          additionalProperties: true
+          description: Параметры команды, зависят от типа устройства
+
+    CommandAccepted:
+      type: object
+      required: [command_id, device_id, command, status, created_at]
+      properties:
+        command_id:
+          type: string
+          format: uuid
+        device_id:
+          type: integer
+          format: int64
+        command:
+          type: string
+        status:
+          type: string
+          enum: [pending, sent, confirmed, failed]
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string

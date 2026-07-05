@@ -1,0 +1,174 @@
+openapi: 3.0.3
+info:
+  title: Telemetry Service API
+  description: >
+    REST API сервиса телеметрии. Чтение последних показаний и истории
+    за период. Запись показаний идет не через REST, а через шину событий -
+    см. asyncapi.yaml.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8083/api/v1
+    description: Локальный запуск telemetry-service
+
+tags:
+  - name: telemetry
+    description: Показания устройств
+
+paths:
+  /devices/{deviceId}/telemetry/latest:
+    parameters:
+      - $ref: '#/components/parameters/DeviceId'
+    get:
+      tags: [telemetry]
+      summary: Последнее показание устройства
+      operationId: getLatestTelemetry
+      responses:
+        '200':
+          description: Последнее показание
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryRecord'
+              examples:
+                latest:
+                  value:
+                    id: 88001
+                    device_id: 517
+                    value: 22.4
+                    unit: "°C"
+                    recorded_at: "2026-07-05T12:40:00Z"
+        '404':
+          $ref: '#/components/responses/NoTelemetry'
+
+  /devices/{deviceId}/telemetry:
+    parameters:
+      - $ref: '#/components/parameters/DeviceId'
+    get:
+      tags: [telemetry]
+      summary: История показаний за период
+      operationId: getTelemetryHistory
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Начало периода (включительно)
+          schema:
+            type: string
+            format: date-time
+            example: "2026-07-05T00:00:00Z"
+        - name: to
+          in: query
+          required: true
+          description: Конец периода (не включительно)
+          schema:
+            type: string
+            format: date-time
+            example: "2026-07-06T00:00:00Z"
+        - name: limit
+          in: query
+          required: false
+          description: Максимум записей в ответе
+          schema:
+            type: integer
+            default: 1000
+            maximum: 10000
+      responses:
+        '200':
+          description: Показания за период, отсортированы по времени
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device_id, items]
+                properties:
+                  device_id:
+                    type: integer
+                    format: int64
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TelemetryRecord'
+              examples:
+                history:
+                  value:
+                    device_id: 517
+                    items:
+                      - id: 87990
+                        device_id: 517
+                        value: 21.9
+                        unit: "°C"
+                        recorded_at: "2026-07-05T12:20:00Z"
+                      - id: 88001
+                        device_id: 517
+                        value: 22.4
+                        unit: "°C"
+                        recorded_at: "2026-07-05T12:40:00Z"
+        '400':
+          description: Некорректный период (from позже to или неверный формат)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                badPeriod:
+                  value:
+                    code: "invalid_period"
+                    message: "'from' must be before 'to'"
+        '404':
+          $ref: '#/components/responses/NoTelemetry'
+
+components:
+  parameters:
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      description: Идентификатор устройства
+      schema:
+        type: integer
+        format: int64
+        example: 517
+
+  responses:
+    NoTelemetry:
+      description: По устройству нет показаний
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            notFound:
+              value:
+                code: "telemetry_not_found"
+                message: "no telemetry for device 517"
+
+  schemas:
+    TelemetryRecord:
+      type: object
+      required: [id, device_id, value, unit, recorded_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        device_id:
+          type: integer
+          format: int64
+        value:
+          type: number
+          description: Значение показания
+        unit:
+          type: string
+          description: Единица измерения
+        recorded_at:
+          type: string
+          format: date-time
+          description: Момент снятия показания на устройстве
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
