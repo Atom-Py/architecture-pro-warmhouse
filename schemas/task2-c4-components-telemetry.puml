@@ -8,10 +8,10 @@ ContainerQueue(kafka, "Шина событий", "Kafka", "")
 ContainerDb(telemetry_db, "БД телеметрии", "PostgreSQL", "")
 
 Container_Boundary(telemetry, "Сервис телеметрии") {
-    Component(consumer, "Консюмер Kafka", "Confluent.Kafka", "Читает поток показаний из топика telemetry.")
+    Component(consumer, "Консюмер Kafka", "kafka-clients", "Читает поток показаний из топика telemetry.")
     Component(processor, "Обработчик показаний", "Service", "Валидация и нормализация показаний перед записью.")
-    Component(api, "REST API", "ASP.NET Core", "Последние значения и история показаний за период.")
-    Component(repo, "Репозиторий", "EF Core", "Запись и чтение показаний.")
+    Component(api, "REST API", "Ktor", "Последние значения и история показаний за период.")
+    Component(repo, "Репозиторий", "Exposed", "Запись и чтение показаний.")
 }
 
 Rel(kafka, consumer, "Топик telemetry", "Kafka")

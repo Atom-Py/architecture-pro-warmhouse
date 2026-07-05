@@ -212,6 +212,20 @@ Locations - название комнаты, sensorId - идентификато
 
 Ревьюер будет проверять точно так же.
 
+### Решение
+
+- Приложение temperature-api лежит в [apps/temperature-api](apps/temperature-api). Написано на Go + Gin, тот же стек и та же версия Gin, что у монолита. Отдает рандомную температуру (15.0 - 30.0) по двум эндпоинтам: `GET /temperature?location=` и `GET /temperature/{sensorId}` - оба формата использует монолит. Формат ответа совпадает с ожиданиями монолита (value, unit, timestamp, location, status, sensor_id, sensor_type, description). Порт по умолчанию 8081.
+- В [apps/docker-compose.yml](apps/docker-compose.yml) добавлены сервис temperature-api (сборка из Dockerfile, порт 8081) и настройки postgres: скрипт инициализации `./smart_home/init.sql` монтируется в docker-entrypoint-initdb.d и создает базу smarthome с таблицей sensors. У postgres настроен healthcheck, монолит стартует после готовности базы.
+
+Запуск:
+
+```bash
+cd apps
+docker compose up -d --build
+```
+
+Проверка коллекцией Postman: Create Sensor, затем несколько раз Get All Sensors - значение температуры датчика меняется при каждом вызове.
+
 
 # **Задание 6. Разработка MVP**
 

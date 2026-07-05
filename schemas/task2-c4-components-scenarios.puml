@@ -4,7 +4,7 @@
 title Диаграмма компонентов (C4, уровень 3) - сервис сценариев
 
 Container(gateway, "API Gateway", "Nginx / Kong", "Единая точка входа")
-Container(devices, "Сервис устройств", "Java, Spring Boot", "Реестр устройств и команды")
+Container(devices, "Сервис устройств", "Python, Robyn", "Реестр устройств и команды")
 ContainerQueue(kafka, "Шина событий", "Kafka", "")
 ContainerDb(scenarios_db, "БД сценариев", "PostgreSQL", "")
 

@@ -9,13 +9,13 @@ ContainerQueue(kafka, "Шина событий", "Kafka", "")
 ContainerDb(devices_db, "БД устройств", "PostgreSQL", "")
 
 Container_Boundary(devices, "Сервис устройств") {
-    Component(api, "REST API", "Spring MVC", "Эндпоинты: CRUD устройств и типов, отправка команд, чтение состояния.")
+    Component(api, "REST API", "Robyn", "Эндпоинты: CRUD устройств и типов, отправка команд, чтение состояния.")
     Component(registry, "Реестр устройств", "Service", "Учёт устройств, типов и модулей. Самостоятельная регистрация устройства пользователем.")
     Component(cmd, "Обработчик команд", "Service", "Валидация команды: устройство существует, тип поддерживает операцию. Публикация в шину.")
     Component(state, "Менеджер состояния", "Service", "Текущее состояние устройств. Обновляется по подтверждениям из шины.")
-    Component(producer, "Продюсер Kafka", "Spring Kafka", "Публикация команд в топик device-commands.")
-    Component(consumer, "Консюмер Kafka", "Spring Kafka", "Чтение подтверждений и статусов из топика device-status.")
-    Component(repo, "Репозиторий", "Spring Data JPA", "Доступ к БД устройств.")
+    Component(producer, "Продюсер Kafka", "confluent-kafka", "Публикация команд в топик device-commands.")
+    Component(consumer, "Консюмер Kafka", "confluent-kafka", "Чтение подтверждений и статусов из топика device-status.")
+    Component(repo, "Репозиторий", "SQLAlchemy", "Доступ к БД устройств.")
 }
 
 Rel(gateway, api, "Запросы пользователя", "REST")
