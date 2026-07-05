@@ -3,8 +3,8 @@ info:
   title: Telemetry Service API
   description: >
     REST API сервиса телеметрии. Чтение последних показаний и истории
-    за период. Запись показаний идет не через REST, а через шину событий -
-    см. asyncapi.yaml.
+    за период. Основной поток записи показаний идет через шину событий
+    (см. asyncapi.yaml), REST-прием - резервный канал.
   version: 1.0.0
 servers:
   - url: http://localhost:8083/api/v1
@@ -74,7 +74,9 @@ paths:
             maximum: 10000
       responses:
         '200':
-          description: Показания за период, отсортированы по времени
+          description: >
+            Показания за период, отсортированы по времени.
+            Если показаний нет, items - пустой список.
           content:
             application/json:
               schema:
@@ -114,8 +116,49 @@ paths:
                   value:
                     code: "invalid_period"
                     message: "'from' must be before 'to'"
-        '404':
-          $ref: '#/components/responses/NoTelemetry'
+
+  /telemetry:
+    post:
+      tags: [telemetry]
+      summary: Прием показания
+      description: >
+        Резервный REST-канал приема показаний. Основной поток показаний
+        идет через шину событий, см. asyncapi.
+      operationId: ingestTelemetry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelemetryIngest'
+            examples:
+              reading:
+                value:
+                  device_id: 517
+                  value: 22.4
+                  unit: "°C"
+                  recorded_at: "2026-07-05T12:40:00Z"
+      responses:
+        '201':
+          description: Показание сохранено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryRecord'
+              examples:
+                saved:
+                  value:
+                    id: 88002
+                    device_id: 517
+                    value: 22.4
+                    unit: "°C"
+                    recorded_at: "2026-07-05T12:40:00Z"
+        '400':
+          description: Некорректное тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
 components:
   parameters:
@@ -143,6 +186,22 @@ components:
                 message: "no telemetry for device 517"
 
   schemas:
+    TelemetryIngest:
+      type: object
+      required: [device_id, value]
+      properties:
+        device_id:
+          type: integer
+          format: int64
+        value:
+          type: number
+        unit:
+          type: string
+        recorded_at:
+          type: string
+          format: date-time
+          description: Если не передано, берется время сервера
+
     TelemetryRecord:
       type: object
       required: [id, device_id, value, unit, recorded_at]

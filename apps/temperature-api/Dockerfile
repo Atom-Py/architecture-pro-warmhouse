@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM alpine:latest AS app-stage
 ENV GIN_MODE=release
-RUN apk --no-cache add ca-certificates tzdata \
+RUN apk --no-cache add ca-certificates curl tzdata \
   && adduser -S -u 1000 app
 WORKDIR /app
 COPY --from=build-stage /out/temperature-api ./

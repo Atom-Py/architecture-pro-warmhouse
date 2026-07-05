@@ -152,7 +152,7 @@ Sequence-диаграмма самого критичного потока - к�
 ### 2. Документация API
 
 - [api/devices-openapi.yaml](api/devices-openapi.yaml) - REST API сервиса устройств: регистрация устройства (POST /devices), карточка устройства (GET /devices/{id}), обновление (PATCH /devices/{id}), отправка команды (POST /devices/{id}/commands, отвечает 202 - доставка асинхронная).
-- [api/telemetry-openapi.yaml](api/telemetry-openapi.yaml) - REST API сервиса телеметрии: последнее показание (GET /devices/{id}/telemetry/latest), история за период (GET /devices/{id}/telemetry?from=&to=).
+- [api/telemetry-openapi.yaml](api/telemetry-openapi.yaml) - REST API сервиса телеметрии: последнее показание (GET /devices/{id}/telemetry/latest), история за период (GET /devices/{id}/telemetry?from=&to=), резервный прием показания (POST /telemetry).
 - [api/warmhouse-asyncapi.yaml](api/warmhouse-asyncapi.yaml) - топики Kafka: telemetry (показания устройств), device-commands (команды устройствам), device-status (подтверждения и смена статусов).
 
 Для каждого эндпоинта в спецификациях описаны форматы запроса и ответа, коды статусов (200, 201, 202, 400, 404, 409, 422) и примеры в блоках examples. Файлы можно открыть в Swagger Editor или AsyncAPI Studio.
@@ -215,7 +215,7 @@ Locations - название комнаты, sensorId - идентификато
 ### Решение
 
 - Приложение temperature-api лежит в [apps/temperature-api](apps/temperature-api). Написано на Go + Gin, тот же стек и та же версия Gin, что у монолита. Отдает рандомную температуру (15.0 - 30.0) по двум эндпоинтам: `GET /temperature?location=` и `GET /temperature/{sensorId}` - оба формата использует монолит. Формат ответа совпадает с ожиданиями монолита (value, unit, timestamp, location, status, sensor_id, sensor_type, description). Порт по умолчанию 8081.
-- В [apps/docker-compose.yml](apps/docker-compose.yml) добавлены сервис temperature-api (сборка из Dockerfile, порт 8081) и настройки postgres: скрипт инициализации `./smart_home/init.sql` монтируется в docker-entrypoint-initdb.d и создает базу smarthome с таблицей sensors. У postgres настроен healthcheck, монолит стартует после готовности базы.
+- В [apps/compose.yaml](apps/compose.yaml) добавлены сервис temperature-api (сборка из Dockerfile, порт 8081) и настройки postgres: скрипт инициализации `./smart_home/init.sql` монтируется в docker-entrypoint-initdb.d и создает базу smarthome с таблицей sensors. У postgres настроен healthcheck, монолит стартует после готовности базы.
 
 Запуск:
 
@@ -237,3 +237,36 @@ docker compose up -d --build
 2. Обеспечьте взаимодействие между микросервисами и монолитом (при желании с помощью брокера сообщений), чтобы постепенно перенести функциональность из монолита в микросервисы. 
 
 В результате у вас должны быть созданы Dockerfiles и docker-compose для запуска микросервисов. 
+
+### Решение
+
+Созданы два микросервиса, каждый на своем ООП-языке, взаимодействие с монолитом идет через брокер сообщений Kafka.
+
+**Сервис устройств** ([apps/device-service](apps/device-service)) - Python 3.14, Robyn, SQLAlchemy (async), aiokafka. Реестр устройств и типов, прием команд управления. Эндпоинты: регистрация устройства (POST /api/v1/devices), список и карточка (GET), обновление (PATCH), отправка команды (POST /api/v1/devices/{id}/commands, отвечает 202). Команда валидируется по capabilities типа устройства, пишется в журнал со статусом pending, публикуется в топик device-commands и переходит в sent. Подтверждения сервис читает из топика device-status и переводит команду в confirmed, а устройство - в актуальный статус. БД devices_db, справочник типов (реле отопления, датчик температуры, свет, ворота, камера) сидируется при старте.
+
+**Сервис телеметрии** ([apps/telemetry-service](apps/telemetry-service)) - Kotlin, Ktor, Exposed, kafka-clients. Читает поток показаний из топика telemetry и сохраняет в БД telemetry_db. Эндпоинты: последнее показание (GET /api/v1/devices/{id}/telemetry/latest), история за период (GET /api/v1/devices/{id}/telemetry?from=&to=), прием показания по REST (POST /api/v1/telemetry).
+
+**Интеграция с монолитом** (паттерн Strangler Fig, монолит выступает временным шлюзом к устройствам):
+
+- телеметрия: монолит после каждого опроса датчика публикует показание в топик telemetry, сервис телеметрии сохраняет историю - у монолита истории не было вообще
+- команды: сервис устройств публикует команду в device-commands, монолит исполняет ее на своей таблице sensors (turn_on/turn_off) и публикует подтверждение в device-status
+- клиент Kafka в монолите включается переменной KAFKA_BOOTSTRAP_SERVERS, без нее монолит работает как раньше
+
+Запуск всего стека:
+
+```bash
+cd apps
+docker compose up -d --build
+```
+
+Быстрая проверка цикла команды:
+
+```bash
+# устройство типа "реле отопления", привязанное к датчику монолита
+curl -X POST http://localhost:8082/api/v1/devices -H "Content-Type: application/json" \
+  -d '{"serial_number": "WH-1", "type_id": 2, "house_id": 1, "name": "Отопление", "sensor_id": 1}'
+curl -X POST http://localhost:8082/api/v1/devices/1/commands -H "Content-Type: application/json" \
+  -d '{"command": "turn_on"}'
+# через пару секунд устройство в статусе on, датчик монолита - active
+curl http://localhost:8082/api/v1/devices/1
+```

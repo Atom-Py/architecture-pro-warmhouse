@@ -34,10 +34,11 @@ paths:
                 summary: Реле отопления в гостиной
                 value:
                   serial_number: "WH-2026-000123"
-                  type_id: 1
+                  type_id: 2
                   house_id: 42
                   name: "Отопление в гостиной"
                   location: "Living Room"
+                  sensor_id: 1
       responses:
         '201':
           description: Устройство зарегистрировано
@@ -50,8 +51,9 @@ paths:
                   value:
                     id: 517
                     serial_number: "WH-2026-000123"
-                    type_id: 1
+                    type_id: 2
                     house_id: 42
+                    sensor_id: 1
                     name: "Отопление в гостиной"
                     location: "Living Room"
                     status: "offline"
@@ -99,8 +101,9 @@ paths:
                   value:
                     id: 517
                     serial_number: "WH-2026-000123"
-                    type_id: 1
+                    type_id: 2
                     house_id: 42
+                    sensor_id: 1
                     name: "Отопление в гостиной"
                     location: "Living Room"
                     status: "on"
@@ -135,8 +138,9 @@ paths:
                   value:
                     id: 517
                     serial_number: "WH-2026-000123"
-                    type_id: 1
+                    type_id: 2
                     house_id: 42
+                    sensor_id: 1
                     name: "Отопление на первом этаже"
                     location: "First Floor"
                     status: "on"
@@ -172,12 +176,10 @@ paths:
                 summary: Включить отопление
                 value:
                   command: "turn_on"
-              setTemperature:
-                summary: Установить целевую температуру
+              turnOff:
+                summary: Выключить отопление
                 value:
-                  command: "set_value"
-                  payload:
-                    target_temperature: 22.5
+                  command: "turn_off"
       responses:
         '202':
           description: Команда принята к асинхронной доставке
@@ -188,10 +190,11 @@ paths:
               examples:
                 accepted:
                   value:
-                    command_id: "0d1f7c1e-9be2-4c8e-9a6b-2f6d5f3a1c11"
+                    id: "0d1f7c1e-9be2-4c8e-9a6b-2f6d5f3a1c11"
                     device_id: 517
                     command: "turn_on"
-                    status: "pending"
+                    payload: null
+                    status: "sent"
                     created_at: "2026-07-05T12:34:56Z"
         '404':
           $ref: '#/components/responses/DeviceNotFound'
@@ -252,6 +255,11 @@ components:
           type: integer
           format: int64
           description: Дом, к которому привязано устройство
+        sensor_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Датчик монолита, к которому привязано устройство (переходный период)
         name:
           type: string
           description: Имя, заданное пользователем
@@ -282,6 +290,11 @@ components:
           type: string
         location:
           type: string
+        sensor_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Датчик монолита для привязки (переходный период)
 
     DeviceUpdate:
       type: object
@@ -310,16 +323,21 @@ components:
 
     CommandAccepted:
       type: object
-      required: [command_id, device_id, command, status, created_at]
+      required: [id, device_id, command, status, created_at]
       properties:
-        command_id:
+        id:
           type: string
           format: uuid
+          description: Идентификатор команды для отслеживания
         device_id:
           type: integer
           format: int64
         command:
           type: string
+        payload:
+          type: object
+          nullable: true
+          additionalProperties: true
         status:
           type: string
           enum: [pending, sent, confirmed, failed]

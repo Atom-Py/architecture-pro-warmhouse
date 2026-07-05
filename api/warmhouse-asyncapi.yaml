@@ -93,6 +93,9 @@ components:
             description: Идентификатор команды для сквозного отслеживания
           device_id:
             type: integer
+          sensor_id:
+            type: integer
+            description: Датчик монолита, исполняющего команду (переходный период)
           command:
             type: string
             description: Имя команды из capabilities типа устройства
@@ -106,6 +109,7 @@ components:
           payload:
             command_id: "0d1f7c1e-9be2-4c8e-9a6b-2f6d5f3a1c11"
             device_id: 517
+            sensor_id: 1
             command: "turn_on"
 
     DeviceStatusEvent:
