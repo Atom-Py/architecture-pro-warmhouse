@@ -1,0 +1,58 @@
+@startuml task2-c4-containers-to-be
+!include <C4/C4_Container>
+
+title Диаграмма контейнеров (C4, уровень 2) - целевая экосистема «Тёплый дом»
+
+Person(user, "Владелец дома", "Сам регистрируется, подключает устройства, настраивает сценарии, смотрит телеметрию.")
+
+System_Boundary(warmhouse, "Экосистема «Тёплый дом»") {
+    Container(webapp, "Веб-приложение", "SPA, JavaScript", "Личный кабинет: устройства, телеметрия, сценарии.")
+    Container(gateway, "API Gateway", "Nginx / Kong", "Единая точка входа. Проверка JWT, маршрутизация запросов по сервисам.")
+
+    Container(users, "Сервис пользователей и домов", "Go", "Регистрация, аутентификация (JWT), профили, дома, привязка устройств к домам.")
+    ContainerDb(users_db, "БД пользователей", "PostgreSQL", "Пользователи, дома, права доступа.")
+
+    Container(devices, "Сервис устройств", "Java, Spring Boot", "Реестр устройств и их типов, текущее состояние, приём команд управления.")
+    ContainerDb(devices_db, "БД устройств", "PostgreSQL", "Устройства, типы устройств, модули.")
+
+    Container(telemetry, "Сервис телеметрии", "C#, ASP.NET Core", "Приём потока показаний из шины, хранение истории, API чтения.")
+    ContainerDb(telemetry_db, "БД телеметрии", "PostgreSQL", "История показаний устройств.")
+
+    Container(scenarios, "Сервис сценариев", "Go", "Правила автоматизации пользователя. Подписан на телеметрию, отправляет команды устройствам.")
+    ContainerDb(scenarios_db, "БД сценариев", "PostgreSQL", "Правила и их состояние.")
+
+    Container(monolith, "Монолит smart_home", "Go", "Управление отоплением на переходный период. Постепенно замещается сервисами (Strangler Fig).")
+    ContainerDb(monolith_db, "БД монолита", "PostgreSQL", "Таблица sensors.")
+
+    Container(device_gw, "IoT-шлюз (device-gateway)", "Go", "Мост между устройствами (MQTT) и внутренней шиной (Kafka). Адаптеры протоколов для партнёрских устройств.")
+
+    ContainerQueue(kafka, "Шина событий", "Kafka", "Топики: telemetry, device-commands, device-status.")
+    ContainerQueue(mqtt, "MQTT-брокер", "EMQX", "Канал связи с устройствами: телеметрия и команды.")
+}
+
+System_Ext(smart_devices, "Умные устройства", "Датчики, реле отопления и света, ворота, камеры. Свои и партнёрские, протокол MQTT.")
+
+Rel(user, webapp, "Работает в личном кабинете", "HTTPS")
+Rel(webapp, gateway, "REST-запросы", "HTTPS, JSON")
+Rel(gateway, users, "Регистрация, вход, дома", "REST")
+Rel(gateway, devices, "Управление устройствами", "REST")
+Rel(gateway, telemetry, "Просмотр телеметрии", "REST")
+Rel(gateway, scenarios, "Настройка сценариев", "REST")
+Rel(gateway, monolith, "Функции отопления (переходный период)", "REST")
+
+Rel(users, users_db, "Чтение и запись", "SQL")
+Rel(devices, devices_db, "Чтение и запись", "SQL")
+Rel(telemetry, telemetry_db, "Чтение и запись", "SQL")
+Rel(scenarios, scenarios_db, "Чтение и запись", "SQL")
+Rel(monolith, monolith_db, "Чтение и запись", "SQL")
+
+Rel(devices, kafka, "Пишет команды в device-commands, читает подтверждения из device-status", "Kafka")
+Rel(telemetry, kafka, "Читает топик telemetry", "Kafka")
+Rel(scenarios, kafka, "Читает топик telemetry", "Kafka")
+Rel(scenarios, devices, "Отправляет команды по правилам", "REST")
+Rel(device_gw, kafka, "Пишет telemetry и device-status, читает device-commands", "Kafka")
+Rel(device_gw, mqtt, "Подписка на показания, публикация команд", "MQTT")
+Rel(smart_devices, mqtt, "Публикуют показания, получают команды", "MQTT")
+
+SHOW_LEGEND()
+@enduml
