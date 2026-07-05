@@ -1,1 +1,22 @@
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Go
+*.exe
+*.test
+*.out
+bin/
+vendor/
+
+# Env / secrets
+.env
+.env.*
+
+# Logs
+*.log
