@@ -1,0 +1,25 @@
+@startuml task2-c4-components-telemetry
+!include <C4/C4_Component>
+
+title Диаграмма компонентов (C4, уровень 3) - сервис телеметрии
+
+Container(gateway, "API Gateway", "Nginx / Kong", "Единая точка входа")
+ContainerQueue(kafka, "Шина событий", "Kafka", "")
+ContainerDb(telemetry_db, "БД телеметрии", "PostgreSQL", "")
+
+Container_Boundary(telemetry, "Сервис телеметрии") {
+    Component(consumer, "Консюмер Kafka", "kafka-clients", "Читает поток показаний из топика telemetry.")
+    Component(processor, "Обработчик показаний", "Service", "Валидация и нормализация показаний перед записью.")
+    Component(api, "REST API", "Ktor", "Последние значения и история показаний за период.")
+    Component(repo, "Репозиторий", "Exposed", "Запись и чтение показаний.")
+}
+
+Rel(kafka, consumer, "Топик telemetry", "Kafka")
+Rel(consumer, processor, "Сырое показание")
+Rel(processor, repo, "Запись показания")
+Rel(gateway, api, "Запросы пользователя", "REST")
+Rel(api, repo, "Чтение истории и последних значений")
+Rel(repo, telemetry_db, "SQL")
+
+SHOW_LEGEND()
+@enduml

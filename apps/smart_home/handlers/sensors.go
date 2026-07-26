@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"smarthome/db"
+	"smarthome/kafka"
 	"smarthome/models"
 	"smarthome/services"
 
@@ -18,13 +19,15 @@ import (
 type SensorHandler struct {
 	DB                 *db.DB
 	TemperatureService *services.TemperatureService
+	Kafka              *kafka.Client
 }
 
 // NewSensorHandler creates a new SensorHandler
-func NewSensorHandler(db *db.DB, temperatureService *services.TemperatureService) *SensorHandler {
+func NewSensorHandler(db *db.DB, temperatureService *services.TemperatureService, kafkaClient *kafka.Client) *SensorHandler {
 	return &SensorHandler{
 		DB:                 db,
 		TemperatureService: temperatureService,
+		Kafka:              kafkaClient,
 	}
 }
 
@@ -60,6 +63,7 @@ func (h *SensorHandler) GetSensors(c *gin.Context) {
 				sensors[i].Status = tempData.Status
 				sensors[i].LastUpdated = tempData.Timestamp
 				log.Printf("Updated temperature data for sensor %d from external API", sensor.ID)
+				h.Kafka.PublishTelemetryAsync(sensor.ID, tempData.Value, tempData.Unit, tempData.Timestamp)
 			} else {
 				log.Printf("Failed to fetch temperature data for sensor %d: %v", sensor.ID, err)
 			}
@@ -92,6 +96,7 @@ func (h *SensorHandler) GetSensorByID(c *gin.Context) {
 			sensor.Status = tempData.Status
 			sensor.LastUpdated = tempData.Timestamp
 			log.Printf("Updated temperature data for sensor %d from external API", sensor.ID)
+			h.Kafka.PublishTelemetryAsync(sensor.ID, tempData.Value, tempData.Unit, tempData.Timestamp)
 		} else {
 			log.Printf("Failed to fetch temperature data for sensor %d: %v", sensor.ID, err)
 		}

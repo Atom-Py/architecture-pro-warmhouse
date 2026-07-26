@@ -1,0 +1,116 @@
+@startuml task3-er-diagram
+title ER-диаграмма целевой системы
+
+hide circle
+top to bottom direction
+
+package "БД пользователей (users-service)" {
+    entity "User (Пользователь)" as user {
+        * id : bigint <<PK>>
+        --
+        * email : varchar <<UQ>>
+        * password_hash : varchar
+        * name : varchar
+        phone : varchar
+        * created_at : timestamptz
+    }
+
+    entity "House (Дом)" as house {
+        * id : bigint <<PK>>
+        --
+        * user_id : bigint <<FK>>
+        * name : varchar
+        * address : varchar
+        * created_at : timestamptz
+    }
+}
+
+package "БД устройств (devices-service)" {
+    entity "DeviceType (Тип устройства)" as device_type {
+        * id : bigint <<PK>>
+        --
+        * name : varchar
+        * vendor : varchar
+        * protocol : varchar
+        * capabilities : jsonb
+        description : text
+    }
+
+    entity "Module (Модуль-комплект)" as module {
+        * id : bigint <<PK>>
+        --
+        * name : varchar
+        * price : numeric
+        description : text
+    }
+
+    entity "ModuleDeviceType (Состав комплекта)" as module_device_type {
+        * module_id : bigint <<PK, FK>>
+        * device_type_id : bigint <<PK, FK>>
+        --
+        * quantity : int
+    }
+
+    entity "Device (Устройство)" as device {
+        * id : bigint <<PK>>
+        --
+        * type_id : bigint <<FK>>
+        * house_id : bigint <<FK*>>
+        * serial_number : varchar <<UQ>>
+        * name : varchar
+        location : varchar
+        * status : varchar
+        * registered_at : timestamptz
+    }
+
+    entity "DeviceCommand (Команда)" as command {
+        * id : uuid <<PK>>
+        --
+        * device_id : bigint <<FK>>
+        * command : varchar
+        payload : jsonb
+        * status : varchar
+        * created_at : timestamptz
+    }
+}
+
+package "БД телеметрии (telemetry-service)" {
+    entity "TelemetryData (Показание)" as telemetry {
+        * id : bigint <<PK>>
+        --
+        * device_id : bigint <<FK*>>
+        * value : numeric
+        * unit : varchar
+        * recorded_at : timestamptz
+    }
+}
+
+package "БД сценариев (scenarios-service)" {
+    entity "Scenario (Сценарий)" as scenario {
+        * id : bigint <<PK>>
+        --
+        * house_id : bigint <<FK*>>
+        * name : varchar
+        * enabled : boolean
+        * condition : jsonb
+        * action : jsonb
+        * created_at : timestamptz
+    }
+}
+
+user ||--o{ house : "владеет"
+house ||..o{ device : "содержит"
+device_type ||--o{ device : "определяет тип"
+module ||--o{ module_device_type : "состоит из"
+device_type ||--o{ module_device_type : "входит в"
+device ||--o{ command : "получает"
+device ||..o{ telemetry : "генерирует"
+house ||..o{ scenario : "автоматизируется"
+
+note bottom
+  Сплошные связи - внешние ключи внутри одной БД.
+  Пунктирные связи и <<FK*>> - логические ссылки между БД
+  разных сервисов, без ограничений внешнего ключа.
+end note
+
+@enduml

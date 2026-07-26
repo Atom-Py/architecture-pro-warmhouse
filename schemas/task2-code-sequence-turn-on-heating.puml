@@ -1,0 +1,37 @@
+@startuml task2-code-sequence-turn-on-heating
+title Диаграмма последовательности - пользователь включает отопление
+
+actor "Владелец дома" as user
+participant "Веб-приложение" as web
+participant "API Gateway" as gw
+participant "Сервис устройств" as dev
+queue "Kafka" as kafka
+participant "IoT-шлюз" as iotgw
+queue "MQTT-брокер" as mqtt
+participant "Реле отопления" as relay
+
+user -> web : включить отопление
+web -> gw : POST /api/v1/devices/{id}/commands\n{"command": "turn_on"}
+gw -> gw : проверка JWT
+gw -> dev : POST /devices/{id}/commands
+dev -> dev : валидация: устройство есть,\nтип поддерживает команду
+dev -> kafka : publish device-commands\n{command_id, device_id, turn_on}
+dev --> gw : 202 Accepted {command_id, status: pending}
+gw --> web : 202 Accepted
+web --> user : команда отправлена
+
+kafka -> iotgw : consume device-commands
+iotgw -> mqtt : publish home/{house_id}/{device_id}/cmd
+mqtt -> relay : turn_on
+relay --> mqtt : publish home/{house_id}/{device_id}/status {on}
+mqtt --> iotgw : status {on}
+iotgw -> kafka : publish device-status {device_id, on}
+kafka -> dev : consume device-status
+dev -> dev : обновить состояние устройства
+
+web -> gw : GET /api/v1/devices/{id}
+gw -> dev : GET /devices/{id}
+dev --> gw : 200 {status: on}
+gw --> web : 200 {status: on}
+web --> user : отопление включено
+@enduml

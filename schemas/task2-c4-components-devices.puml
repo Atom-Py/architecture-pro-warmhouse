@@ -1,0 +1,35 @@
+@startuml task2-c4-components-devices
+!include <C4/C4_Component>
+
+title Диаграмма компонентов (C4, уровень 3) - сервис устройств
+
+Container(gateway, "API Gateway", "Nginx / Kong", "Единая точка входа")
+Container(scenarios, "Сервис сценариев", "Go", "Правила автоматизации")
+ContainerQueue(kafka, "Шина событий", "Kafka", "")
+ContainerDb(devices_db, "БД устройств", "PostgreSQL", "")
+
+Container_Boundary(devices, "Сервис устройств") {
+    Component(api, "REST API", "Robyn", "Эндпоинты: CRUD устройств и типов, отправка команд, чтение состояния.")
+    Component(registry, "Реестр устройств", "Service", "Учёт устройств, типов и модулей. Самостоятельная регистрация устройства пользователем.")
+    Component(cmd, "Обработчик команд", "Service", "Валидация команды: устройство существует, тип поддерживает операцию. Публикация в шину.")
+    Component(state, "Менеджер состояния", "Service", "Текущее состояние устройств. Обновляется по подтверждениям из шины.")
+    Component(producer, "Продюсер Kafka", "confluent-kafka", "Публикация команд в топик device-commands.")
+    Component(consumer, "Консюмер Kafka", "confluent-kafka", "Чтение подтверждений и статусов из топика device-status.")
+    Component(repo, "Репозиторий", "SQLAlchemy", "Доступ к БД устройств.")
+}
+
+Rel(gateway, api, "Запросы пользователя", "REST")
+Rel(scenarios, api, "Команды по правилам", "REST")
+Rel(api, registry, "CRUD устройств и типов")
+Rel(api, cmd, "Отправка команды")
+Rel(api, state, "Чтение состояния")
+Rel(cmd, producer, "Команда к отправке")
+Rel(producer, kafka, "device-commands", "Kafka")
+Rel(kafka, consumer, "device-status", "Kafka")
+Rel(consumer, state, "Обновление состояния")
+Rel(registry, repo, "Чтение и запись")
+Rel(state, repo, "Чтение и запись")
+Rel(repo, devices_db, "SQL")
+
+SHOW_LEGEND()
+@enduml

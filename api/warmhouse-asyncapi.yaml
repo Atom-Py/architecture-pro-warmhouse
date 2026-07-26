@@ -1,0 +1,143 @@
+asyncapi: 2.6.0
+info:
+  title: Warmhouse Event Bus
+  description: >
+    Асинхронные взаимодействия экосистемы через Kafka.
+    Телеметрия и статусы идут от устройств через IoT-шлюз в шину,
+    команды - из сервиса устройств через шину к IoT-шлюзу и дальше
+    по MQTT до устройства.
+  version: 1.0.0
+
+servers:
+  kafka:
+    url: kafka:9092
+    protocol: kafka
+    description: Кластер Kafka экосистемы
+
+channels:
+  telemetry:
+    description: >
+      Поток показаний устройств. Пишет IoT-шлюз.
+      Читают сервис телеметрии (сохраняет историю) и сервис сценариев
+      (проверяет правила автоматизации).
+    subscribe:
+      operationId: onTelemetry
+      summary: Получение показаний устройств
+      message:
+        $ref: '#/components/messages/TelemetryEvent'
+
+  device-commands:
+    description: >
+      Команды устройствам. Пишет сервис устройств после валидации.
+      Читает IoT-шлюз и доставляет устройству по MQTT.
+    subscribe:
+      operationId: onDeviceCommand
+      summary: Получение команд для доставки устройствам
+      message:
+        $ref: '#/components/messages/DeviceCommand'
+
+  device-status:
+    description: >
+      Подтверждения и смена статуса устройств. Пишет IoT-шлюз
+      по сообщениям от устройств. Читает сервис устройств
+      и обновляет текущее состояние в своей БД.
+    subscribe:
+      operationId: onDeviceStatus
+      summary: Получение статусов устройств
+      message:
+        $ref: '#/components/messages/DeviceStatusEvent'
+
+components:
+  messages:
+    TelemetryEvent:
+      name: TelemetryEvent
+      title: Показание устройства
+      contentType: application/json
+      payload:
+        type: object
+        required: [device_id, value, unit, recorded_at]
+        properties:
+          device_id:
+            type: integer
+            description: Идентификатор устройства
+          value:
+            type: number
+            description: Значение показания
+          unit:
+            type: string
+            description: Единица измерения
+          recorded_at:
+            type: string
+            format: date-time
+            description: Момент снятия показания
+      examples:
+        - name: temperature
+          summary: Показание температуры из гостиной
+          payload:
+            device_id: 517
+            value: 22.4
+            unit: "°C"
+            recorded_at: "2026-07-05T12:40:00Z"
+
+    DeviceCommand:
+      name: DeviceCommand
+      title: Команда устройству
+      contentType: application/json
+      payload:
+        type: object
+        required: [command_id, device_id, command]
+        properties:
+          command_id:
+            type: string
+            format: uuid
+            description: Идентификатор команды для сквозного отслеживания
+          device_id:
+            type: integer
+          sensor_id:
+            type: integer
+            description: Датчик монолита, исполняющего команду (переходный период)
+          command:
+            type: string
+            description: Имя команды из capabilities типа устройства
+          payload:
+            type: object
+            additionalProperties: true
+            description: Параметры команды
+      examples:
+        - name: turnOn
+          summary: Включить отопление
+          payload:
+            command_id: "0d1f7c1e-9be2-4c8e-9a6b-2f6d5f3a1c11"
+            device_id: 517
+            sensor_id: 1
+            command: "turn_on"
+
+    DeviceStatusEvent:
+      name: DeviceStatusEvent
+      title: Статус устройства
+      contentType: application/json
+      payload:
+        type: object
+        required: [device_id, status, occurred_at]
+        properties:
+          device_id:
+            type: integer
+          status:
+            type: string
+            enum: [on, off, offline]
+            description: Новое состояние устройства
+          command_id:
+            type: string
+            format: uuid
+            description: Заполнено, если статус - результат команды
+          occurred_at:
+            type: string
+            format: date-time
+      examples:
+        - name: confirmed
+          summary: Реле подтвердило включение
+          payload:
+            device_id: 517
+            status: "on"
+            command_id: "0d1f7c1e-9be2-4c8e-9a6b-2f6d5f3a1c11"
+            occurred_at: "2026-07-05T12:34:58Z"

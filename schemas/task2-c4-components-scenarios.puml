@@ -1,0 +1,28 @@
+@startuml task2-c4-components-scenarios
+!include <C4/C4_Component>
+
+title Диаграмма компонентов (C4, уровень 3) - сервис сценариев
+
+Container(gateway, "API Gateway", "Nginx / Kong", "Единая точка входа")
+Container(devices, "Сервис устройств", "Python, Robyn", "Реестр устройств и команды")
+ContainerQueue(kafka, "Шина событий", "Kafka", "")
+ContainerDb(scenarios_db, "БД сценариев", "PostgreSQL", "")
+
+Container_Boundary(scenarios, "Сервис сценариев") {
+    Component(api, "REST API", "Gin", "CRUD правил автоматизации.")
+    Component(consumer, "Консюмер Kafka", "franz-go", "Читает события телеметрии из топика telemetry.")
+    Component(engine, "Движок правил", "Service", "Сопоставляет событие с условиями правил. Пример: температура ниже 18 - включить отопление.")
+    Component(dispatcher, "Диспетчер команд", "HTTP-клиент", "Отправка команды в сервис устройств при срабатывании правила.")
+    Component(repo, "Репозиторий", "pgx", "Хранение правил и их состояния.")
+}
+
+Rel(gateway, api, "Настройка правил", "REST")
+Rel(kafka, consumer, "Топик telemetry", "Kafka")
+Rel(consumer, engine, "Событие телеметрии")
+Rel(engine, repo, "Чтение правил")
+Rel(api, repo, "Чтение и запись правил")
+Rel(engine, dispatcher, "Сработавшее правило")
+Rel(dispatcher, devices, "Команда устройству", "REST")
+
+SHOW_LEGEND()
+@enduml

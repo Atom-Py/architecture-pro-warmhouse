@@ -1,0 +1,27 @@
+@startuml task2-c4-components-device-gateway
+!include <C4/C4_Component>
+
+title Диаграмма компонентов (C4, уровень 3) - IoT-шлюз (device-gateway)
+
+ContainerQueue(mqtt, "MQTT-брокер", "EMQX", "Канал связи с устройствами")
+ContainerQueue(kafka, "Шина событий", "Kafka", "")
+System_Ext(smart_devices, "Умные устройства", "Свои и партнёрские, протокол MQTT")
+
+Container_Boundary(device_gw, "IoT-шлюз") {
+    Component(mqtt_adapter, "MQTT-адаптер", "paho / mochi", "Подписка на топики показаний устройств, публикация команд устройствам.")
+    Component(translator, "Транслятор протоколов", "Service", "Приведение сообщений разных производителей к единому формату. Новые форматы добавляются как адаптеры, без изменения ядра.")
+    Component(bridge, "Мост Kafka", "franz-go", "Публикация телеметрии и статусов в шину, чтение команд из device-commands.")
+}
+
+Rel(smart_devices, mqtt, "Показания и статусы", "MQTT")
+Rel(mqtt, mqtt_adapter, "Сообщения устройств", "MQTT")
+Rel(mqtt_adapter, translator, "Сырое сообщение устройства")
+Rel(translator, bridge, "Событие в едином формате")
+Rel(bridge, kafka, "Топики telemetry, device-status", "Kafka")
+Rel(kafka, bridge, "Топик device-commands", "Kafka")
+Rel(bridge, translator, "Команда в единый формат устройства")
+Rel(translator, mqtt_adapter, "Команда в формате устройства")
+Rel(mqtt_adapter, mqtt, "Публикация команды", "MQTT")
+
+SHOW_LEGEND()
+@enduml

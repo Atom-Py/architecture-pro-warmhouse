@@ -1,0 +1,24 @@
+@startuml task2-c4-components-users
+!include <C4/C4_Component>
+
+title Диаграмма компонентов (C4, уровень 3) - сервис пользователей и домов
+
+Container(gateway, "API Gateway", "Nginx / Kong", "Единая точка входа")
+ContainerDb(users_db, "БД пользователей", "PostgreSQL", "")
+
+Container_Boundary(users, "Сервис пользователей и домов") {
+    Component(api, "REST API", "Gin", "Эндпоинты: регистрация, вход, профиль, дома.")
+    Component(auth, "Модуль аутентификации", "Service", "Проверка пароля, выдача и обновление JWT.")
+    Component(houses, "Менеджер домов", "Service", "Дома пользователя, привязка устройств к дому.")
+    Component(repo, "Репозиторий", "pgx", "Доступ к БД пользователей.")
+}
+
+Rel(gateway, api, "Запросы пользователя", "REST")
+Rel(api, auth, "Вход, обновление токена")
+Rel(api, houses, "CRUD домов")
+Rel(auth, repo, "Чтение учётных записей")
+Rel(houses, repo, "Чтение и запись")
+Rel(repo, users_db, "SQL")
+
+SHOW_LEGEND()
+@enduml
